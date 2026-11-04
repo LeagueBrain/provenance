@@ -51,7 +51,7 @@ importers:
   example:
     dependencies:
       '@leaguebrain/provenance':
-        specifier: workspace:0.14.0
+        specifier: workspace:0.15.0
         version: link:../packages/provenance
       svelte:
         specifier: 5.56.3
