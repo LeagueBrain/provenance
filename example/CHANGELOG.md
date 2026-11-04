@@ -1,5 +1,11 @@
 # example
 
+## 0.0.19
+### Patch Changes
+
+- Updated dependencies [c27025f]
+  - @leaguebrain/provenance@0.15.0
+
 ## 0.0.18
 ### Patch Changes
 
