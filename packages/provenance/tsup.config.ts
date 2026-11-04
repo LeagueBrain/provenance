@@ -14,7 +14,9 @@ export const tsup: Options = {
 	format: ['esm'],
 	legacyOutput: false,
 	sourcemap: true,
-	splitting: false,
+	// The entry points share one chunk of common code. Without this, each entry point holds
+	// its own copy of each class, and an instanceof check across entry points fails.
+	splitting: true,
 	bundle: true,
 	clean: true,
 	define: {

@@ -1,5 +1,3 @@
-import { TokenEndpointError } from '../tokens';
-
 /**
  * remembers, per server instance, that the auth server did not answer
  *
@@ -22,6 +20,14 @@ export const authServerAvailability = (pauseMs: number): AuthServerAvailability 
 	};
 };
 
-/** true when the token endpoint refused the grant (400 or 401), so the session is over */
+/**
+ * true when the token endpoint refused the grant (400 or 401), so the session is over
+ *
+ * the check reads the error's name, not its class: an app can load two copies of this
+ * package, and then `instanceof` fails for an error from the other copy
+ */
 export const isGrantRefused = (e: unknown): boolean =>
-	e instanceof TokenEndpointError && (e.status === 400 || e.status === 401);
+	e instanceof Error &&
+	e.name === 'TokenEndpointError' &&
+	'status' in e &&
+	(e.status === 400 || e.status === 401);
