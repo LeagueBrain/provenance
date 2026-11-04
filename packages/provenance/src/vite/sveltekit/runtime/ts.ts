@@ -56,6 +56,11 @@ function createContext<ProviderSession, AppSession extends ProviderSession>(
 		return pathName.startsWith(searchPathname);
 	};
 
+	// Calls to the auth server use the global fetch, not event.fetch. SvelteKit's event.fetch adds
+	// an Origin header to a cross-origin request. Keycloak refuses a token request with a 403 when
+	// the client does not list that origin in its web origins.
+	const authServerFetch: typeof fetch = (input, init) => fetch(input, init);
+
 	return {
 		oauth: {
 			processAuthResponse: (expectedState: string) => {
@@ -100,7 +105,7 @@ function createContext<ProviderSession, AppSession extends ProviderSession>(
 						console.log('code_verifier:', code_verifier);
 					}
 
-					return await event.fetch(url, {
+					return await authServerFetch(url, {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/x-www-form-urlencoded',
@@ -147,7 +152,7 @@ function createContext<ProviderSession, AppSession extends ProviderSession>(
 						console.log('refresh_token:', body.refresh_token);
 					}
 
-					return await event.fetch(url, {
+					return await authServerFetch(url, {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/x-www-form-urlencoded'
@@ -180,7 +185,7 @@ function createContext<ProviderSession, AppSession extends ProviderSession>(
 				}
 
 				try {
-					const response = await event.fetch(url, { signal: AbortSignal.timeout(timeout) });
+					const response = await authServerFetch(url, { signal: AbortSignal.timeout(timeout) });
 					// only the status is needed, so the body does not hold the connection
 					await response.body?.cancel();
 					return response.ok;
@@ -217,7 +222,7 @@ function createContext<ProviderSession, AppSession extends ProviderSession>(
 						console.log('body:', body);
 					}
 
-					return await event.fetch(url, {
+					return await authServerFetch(url, {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/x-www-form-urlencoded'
