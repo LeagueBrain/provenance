@@ -89,3 +89,19 @@ export class TokenRequestResult {
 		return this.requireString('scope').split(' ');
 	}
 }
+
+/**
+ * the token endpoint answered with an error, or with a body that is not a token response
+ *
+ * `status` is the http status, so a caller can tell a refused grant (400, 401) from an auth
+ * server that is down (5xx, 429)
+ */
+export class TokenEndpointError extends Error {
+	readonly status: number;
+
+	constructor(status: number, message: string) {
+		super(message);
+		this.name = 'TokenEndpointError';
+		this.status = status;
+	}
+}

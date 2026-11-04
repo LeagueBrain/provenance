@@ -2,6 +2,7 @@ import type { TokenRequestResult } from '../tokens';
 
 import {
 	type Resolver,
+	authServerAvailability,
 	localsResolver,
 	loginResolver,
 	logoutResolver,
@@ -33,6 +34,20 @@ export type KeycloakConfiguration = {
 		 * at infinity, refresh on every request
 		 */
 		eagerRefresh?: number;
+		/** in ms; a refresh that takes longer counts as keycloak not answering (default 5000) */
+		refreshTimeout?: number;
+		/** in ms; the time the login route waits for the keycloak check (default 3000) */
+		checkTimeout?: number;
+		/**
+		 * in ms; after keycloak does not answer, the time this server instance skips calls to it
+		 * (default 15000)
+		 *
+		 * meanwhile a session is kept and `locals.authDegraded` is set, and the login route renders
+		 * the app's own page with a 503
+		 */
+		unavailablePause?: number;
+		/** drop the session on the login route, so a visit always signs in again (default false) */
+		forceLogin?: boolean;
 	};
 	scopes: string[];
 };
@@ -52,8 +67,14 @@ export const keycloak: CreateProvider<KeycloakConfiguration, KeycloakSession> = 
 ) => {
 	const defaultedOptions = {
 		eagerRefresh: 0,
+		refreshTimeout: 5000,
+		checkTimeout: 3000,
+		unavailablePause: 15000,
+		forceLogin: false,
 		...configuration.options
 	};
+
+	const availability = authServerAvailability(defaultedOptions.unavailablePause);
 
 	const authServer = {
 		issuer: new URL(`/realms/${configuration.realm}`, configuration.base).toString(),
@@ -188,16 +209,31 @@ export const keycloak: CreateProvider<KeycloakConfiguration, KeycloakSession> = 
 	const resolvers: Resolver<KeycloakSession>[] = [
 		redirectUriResolver(),
 		localsResolver(),
-		loginResolver(),
+		loginResolver({
+			forceLogin: defaultedOptions.forceLogin,
+			outage: {
+				availability,
+				timeout: defaultedOptions.checkTimeout,
+				discoveryUrl: new URL(`${authServer.issuer}/.well-known/openid-configuration`)
+			}
+		}),
 		signupResolver(),
 		async (context, resolve) => {
 			if (context.routes.logout.is && context.locals.session) {
-				await context.oauth.preLogout(context.locals.session);
+				try {
+					await context.oauth.preLogout(context.locals.session);
+				} catch (e) {
+					// keycloak did not end its session, but the local logout still happens
+					console.error('provenance:', e);
+				}
 			}
 			return await resolve();
 		},
 		logoutResolver(),
-		refreshResolver({ eagerRefresh: defaultedOptions.eagerRefresh })
+		refreshResolver({
+			eagerRefresh: defaultedOptions.eagerRefresh,
+			outage: { availability, timeout: defaultedOptions.refreshTimeout }
+		})
 	];
 
 	return provider(authServer, endpoints, session, resolvers);

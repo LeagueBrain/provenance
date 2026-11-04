@@ -55,6 +55,8 @@ declare global {
 
 		interface Locals {
 			session: Session | null;
+			/** true when the auth server did not answer, and the session (if any) was kept */
+			authDegraded?: boolean;
 		}
 	}
 }
