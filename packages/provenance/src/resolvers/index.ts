@@ -1,3 +1,4 @@
+export { type AuthServerAvailability, authServerAvailability } from './availability';
 export { localsResolver } from './locals';
 export { loginResolver } from './login';
 export { logoutResolver } from './logout';

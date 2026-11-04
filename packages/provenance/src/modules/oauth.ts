@@ -1,4 +1,4 @@
-import { TokenRequestResult } from '../tokens';
+import { TokenEndpointError, TokenRequestResult } from '../tokens';
 
 import type { SerializeOptions } from 'cookie';
 
@@ -6,15 +6,26 @@ import type { Provider } from '../providers/types';
 import type { ChecksModule } from './checks';
 
 async function processTokensResponse(tokensResponse: Response) {
-	const data = await tokensResponse.json();
+	const status = tokensResponse.status;
+
+	let data: unknown;
+	try {
+		data = await tokensResponse.json();
+	} catch {
+		// a load balancer in front of a down auth server answers html, not json
+		throw new TokenEndpointError(status, `token endpoint answered ${status} with no json body`);
+	}
 	if (typeof data !== 'object' || data === null) {
-		throw new Error('Unexpected response');
+		throw new TokenEndpointError(status, 'Unexpected response');
 	}
 	const result = new TokenRequestResult(data);
 	if (result.hasErrorCode()) {
 		const error = result.errorCode();
-		const errorDescription = result.errorDescription();
-		throw new Error(`${error}: ${errorDescription}`);
+		const errorDescription = result.hasErrorDescription() ? `: ${result.errorDescription()}` : '';
+		throw new TokenEndpointError(status, `${error}${errorDescription}`);
+	}
+	if (!tokensResponse.ok) {
+		throw new TokenEndpointError(status, `token endpoint answered ${status}`);
 	}
 
 	return result;
@@ -103,18 +114,24 @@ export const o = <Session>(
 					client_secret: string;
 					grant_type: 'refresh_token';
 					refresh_token: string;
-				}
+				},
+				signal?: AbortSignal
 			) => Promise<Response>,
-			refreshToken: string
+			refreshToken: string,
+			signal?: AbortSignal
 		) {
 			const url = provider.endpoints.createTokenUrl();
 
-			const response = await fetchRefreshedTokens(url, {
-				client_id: provider.authServer.clientId,
-				client_secret: provider.authServer.clientSecret,
-				grant_type: 'refresh_token',
-				refresh_token: refreshToken
-			});
+			const response = await fetchRefreshedTokens(
+				url,
+				{
+					client_id: provider.authServer.clientId,
+					client_secret: provider.authServer.clientSecret,
+					grant_type: 'refresh_token',
+					refresh_token: refreshToken
+				},
+				signal
+			);
 
 			return processTokensResponse(response);
 		},

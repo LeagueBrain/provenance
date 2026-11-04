@@ -1,6 +1,6 @@
 import type { SerializeOptions } from 'cookie';
-import { TokenRequestResult } from './tokens';
-export { TokenRequestResult };
+import { TokenEndpointError, TokenRequestResult } from './tokens';
+export { TokenEndpointError, TokenRequestResult };
 
 export type Cookie = {
 	name: string;

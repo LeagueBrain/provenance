@@ -129,7 +129,7 @@ function createContext<ProviderSession, AppSession extends ProviderSession>(
 
 				return tokenEndpointResponse;
 			},
-			refresh: async (refreshToken: string) => {
+			refresh: async (refreshToken: string, options?: { signal?: AbortSignal }) => {
 				const fetchRefreshedToken = async (
 					url: URL,
 					body: {
@@ -137,7 +137,8 @@ function createContext<ProviderSession, AppSession extends ProviderSession>(
 						client_secret: string;
 						grant_type: 'refresh_token';
 						refresh_token: string;
-					}
+					},
+					signal?: AbortSignal
 				): Promise<Response> => {
 					if (config.logging) {
 						console.log('client_id:', body.client_id);
@@ -151,7 +152,8 @@ function createContext<ProviderSession, AppSession extends ProviderSession>(
 						headers: {
 							'Content-Type': 'application/x-www-form-urlencoded'
 						},
-						body: new URLSearchParams(body)
+						body: new URLSearchParams(body),
+						signal
 					});
 				};
 
@@ -161,7 +163,8 @@ function createContext<ProviderSession, AppSession extends ProviderSession>(
 
 				const tokenEndpointResponse = await modules.oauth.refresh(
 					fetchRefreshedToken,
-					refreshToken
+					refreshToken,
+					options?.signal
 				);
 
 				if (config.logging) {
@@ -169,6 +172,22 @@ function createContext<ProviderSession, AppSession extends ProviderSession>(
 				}
 
 				return tokenEndpointResponse;
+			},
+			checkAuthServer: async ({ url, timeout }: { url: URL; timeout: number }) => {
+				if (config.logging) {
+					logStarter('oauth:', 'checkAuthServer');
+					console.log('url:', url.href);
+				}
+
+				try {
+					const response = await event.fetch(url, { signal: AbortSignal.timeout(timeout) });
+					// only the status is needed, so the body does not hold the connection
+					await response.body?.cancel();
+					return response.ok;
+				} catch (e) {
+					console.error('provenance:', e);
+					return false;
+				}
 			},
 			referrer: event.url.searchParams.get('referrer'),
 			redirectLogin: async (referrer: string | null) => {
@@ -316,6 +335,12 @@ function createContext<ProviderSession, AppSession extends ProviderSession>(
 			},
 			set session(value) {
 				event.locals.session = value as App.Session;
+			},
+			get authDegraded() {
+				return event.locals.authDegraded === true;
+			},
+			set authDegraded(value) {
+				event.locals.authDegraded = value;
 			}
 		},
 		routes: {
@@ -425,6 +450,8 @@ declare global {
 
 		interface Locals {
 			session: Session | null;
+			/** true when the auth server did not answer, and the session (if any) was kept */
+			authDegraded?: boolean;
 		}
 	}
 }

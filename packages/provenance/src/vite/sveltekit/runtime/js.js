@@ -112,7 +112,7 @@ function createContext(event, modules, config) {
 
 				return tokenEndpointResponse;
 			},
-			refresh: async (refreshToken) => {
+			refresh: async (refreshToken, options) => {
 				/**
 				 * @param {URL} url
 				 * @param {{
@@ -121,9 +121,10 @@ function createContext(event, modules, config) {
 						grant_type: 'refresh_token';
 						refresh_token: string;
 					}} body
+				 * @param {AbortSignal=} signal
 				 * @returns {Promise<Response>}
 				*/
-				const fetchRefreshedToken = async (url, body) => {
+				const fetchRefreshedToken = async (url, body, signal) => {
 					if (config.logging) {
 						console.log('client_id:', body.client_id);
 						console.log('client_secret:', body.client_secret);
@@ -136,7 +137,8 @@ function createContext(event, modules, config) {
 						headers: {
 							'Content-Type': 'application/x-www-form-urlencoded'
 						},
-						body: new URLSearchParams(body)
+						body: new URLSearchParams(body),
+						signal
 					});
 				};
 
@@ -146,7 +148,8 @@ function createContext(event, modules, config) {
 
 				const tokenEndpointResponse = await modules.oauth.refresh(
 					fetchRefreshedToken,
-					refreshToken
+					refreshToken,
+					options?.signal
 				);
 
 				if (config.logging) {
@@ -154,6 +157,22 @@ function createContext(event, modules, config) {
 				}
 
 				return tokenEndpointResponse;
+			},
+			checkAuthServer: async ({ url, timeout }) => {
+				if (config.logging) {
+					logStarter('oauth:', 'checkAuthServer');
+					console.log('url:', url.href);
+				}
+
+				try {
+					const response = await event.fetch(url, { signal: AbortSignal.timeout(timeout) });
+					// only the status is needed, so the body does not hold the connection
+					await response.body?.cancel();
+					return response.ok;
+				} catch (e) {
+					console.error('provenance:', e);
+					return false;
+				}
 			},
 			referrer: event.url.searchParams.get('referrer'),
 			redirectLogin: async (referrer) => {
@@ -308,6 +327,12 @@ function createContext(event, modules, config) {
 			// @ts-ignore
 			set session(value) {
 				event.locals.session = value;
+			},
+			get authDegraded() {
+				return event.locals.authDegraded === true;
+			},
+			set authDegraded(value) {
+				event.locals.authDegraded = value;
 			}
 		},
 		routes: {
